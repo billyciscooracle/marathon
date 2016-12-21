@@ -4,6 +4,9 @@ import akka.actor._
 import akka.event.{ EventStream, LoggingReceive }
 import akka.stream.Materializer
 import mesosphere.marathon.MarathonSchedulerActor.ScaleRunSpec
+import mesosphere.marathon.core.deployment.impl.DeploymentManagerActor
+import mesosphere.marathon.core.deployment.impl.DeploymentManagerActor._
+import mesosphere.marathon.core.deployment.{ DeploymentPlan, DeploymentStepInfo, ScalingProposition }
 import mesosphere.marathon.core.election.{ ElectionService, LocalLeadershipEvent }
 import mesosphere.marathon.core.event.{ AppTerminatedEvent, DeploymentFailed, DeploymentSuccess }
 import mesosphere.marathon.core.health.HealthCheckManager
@@ -16,8 +19,6 @@ import mesosphere.marathon.core.task.tracker.InstanceTracker
 import mesosphere.marathon.state.{ PathId, RunSpec }
 import mesosphere.marathon.storage.repository.GroupRepository
 import mesosphere.marathon.stream._
-import mesosphere.marathon.upgrade.DeploymentManager._
-import mesosphere.marathon.upgrade.{ DeploymentManager, DeploymentPlan, ScalingProposition }
 import mesosphere.mesos.Constraints
 import org.apache.mesos
 import org.apache.mesos.Protos.{ Status, TaskState }
@@ -57,9 +58,6 @@ class MarathonSchedulerActor private (
     * Since multiple conflicting deployment can be handled at the same time lockedRunSpecs saves
     * the lock count for each affected PathId. Lock is removed if lock count == 0.
     */
-  // TODO (AD): DeploymentManager has already all the information about running deployments.
-  // MarathonSchedulerActor should only save the locks resulting from scale and kill operations,
-  // asking DeploymentManager for deployment locks.
   val lockedRunSpecs = collection.mutable.Map[PathId, Int]().withDefaultValue(0)
   var schedulerActions: SchedulerActions = _
   var deploymentManager: ActorRef = _
@@ -158,7 +156,7 @@ class MarathonSchedulerActor private (
         }
       }
 
-    case cmd: CancelDeployment =>
+    case cmd: DeploymentManagerActor.CancelDeployment =>
       deploymentManager forward cmd
 
     case cmd @ Deploy(plan, force) =>
@@ -182,11 +180,11 @@ class MarathonSchedulerActor private (
       }
       withLockFor(runSpecId) { killTasks() }
 
-    case DeploymentFinished(plan) =>
+    case DeploymentManagerActor.DeploymentFinished(plan) =>
       removeLocks(plan.affectedRunSpecIds)
       deploymentSuccess(plan)
 
-    case DeploymentManager.DeploymentFailed(plan, reason) =>
+    case DeploymentManagerActor.DeploymentFailed(plan, reason) =>
       removeLocks(plan.affectedRunSpecIds)
       deploymentFailed(plan, reason)
 
