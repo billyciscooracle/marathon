@@ -42,7 +42,7 @@ object OfferMatcher {
     */
   case class MatchedInstanceOps(
       offerId: Mesos.OfferID,
-      opsWithSource: Seq[InstanceOpWithSource] = Seq.empty,
+      opsWithSource: Seq[InstanceOpWithSource],
       resendThisOffer: Boolean = false) {
 
     /** all included [InstanceOp] without the source information. */
@@ -51,7 +51,7 @@ object OfferMatcher {
 
   object MatchedInstanceOps {
     def noMatch(offerId: Mesos.OfferID, resendThisOffer: Boolean = false): MatchedInstanceOps =
-      new MatchedInstanceOps(offerId, resendThisOffer = resendThisOffer)
+      new MatchedInstanceOps(offerId, Seq.empty, resendThisOffer = resendThisOffer)
   }
 
   trait InstanceOpSource {
@@ -69,6 +69,9 @@ trait OfferMatcher {
     *
     * The offer matcher can expect either a instanceOpAccepted or a instanceOpRejected call
     * for every returned `org.apache.mesos.Protos.TaskInfo`.
+    *
+    * If match can not be completed within deadline, then returns decline MatchedInstanceOps
+    *
     *
     * TODO(jdef) PODS ... 1:1 ratio between TaskInfo and instanceOpXXX may change?
     */

@@ -20,6 +20,7 @@ import org.apache.mesos.Protos.{ Offer, OfferID }
 import rx.lang.scala.Observer
 
 import scala.collection.immutable.Queue
+import scala.concurrent.Promise
 import scala.util.Random
 import scala.util.control.NonFatal
 
@@ -45,7 +46,7 @@ private[manager] object OfferMatcherManagerActor {
   private case class OfferData(
       offer: Offer,
       deadline: Timestamp,
-      sender: ActorRef,
+      promise: Promise[OfferMatcher.MatchedInstanceOps],
       matcherQueue: Queue[OfferMatcher],
       ops: Seq[InstanceOpWithSource] = Seq.empty,
       matchPasses: Int = 0,
@@ -144,16 +145,16 @@ private[impl] class OfferMatcherManagerActor private (
   }
 
   private[this] def receiveProcessOffer: Receive = {
-    case ActorOfferMatcher.MatchOffer(deadline, offer: Offer) if !offersWanted =>
+    case ActorOfferMatcher.MatchOffer(deadline, offer: Offer, promise: Promise[OfferMatcher.MatchedInstanceOps]) if !offersWanted =>
       log.debug(s"Ignoring offer ${offer.getId.getValue}: No one interested.")
-      sender() ! OfferMatcher.MatchedInstanceOps(offer.getId, resendThisOffer = false)
+      promise.trySuccess(OfferMatcher.MatchedInstanceOps(offer.getId, resendThisOffer = false))
 
-    case ActorOfferMatcher.MatchOffer(deadline, offer: Offer) =>
+    case ActorOfferMatcher.MatchOffer(deadline, offer: Offer, promise: Promise[OfferMatcher.MatchedInstanceOps]) =>
       log.debug(s"Start processing offer ${offer.getId.getValue}")
 
       // setup initial offer data
       val randomizedMatchers = offerMatchers(offer)
-      val data = OfferMatcherManagerActor.OfferData(offer, deadline, sender(), randomizedMatchers)
+      val data = OfferMatcherManagerActor.OfferData(offer, deadline, promise, randomizedMatchers)
       offerQueues += offer.getId -> data
       metrics.currentOffersGauge.setValue(offerQueues.size)
 
@@ -250,7 +251,7 @@ private[impl] class OfferMatcherManagerActor private (
   }
 
   private[this] def sendMatchResult(data: OfferData, resendThisOffer: Boolean): Unit = {
-    data.sender ! OfferMatcher.MatchedInstanceOps(data.offer.getId, data.ops, resendThisOffer)
+    data.promise.trySuccess(OfferMatcher.MatchedInstanceOps(data.offer.getId, data.ops, resendThisOffer))
     offerQueues -= data.offer.getId
     metrics.currentOffersGauge.setValue(offerQueues.size)
     val maxRanges = if (log.isDebugEnabled) 1000 else 10
