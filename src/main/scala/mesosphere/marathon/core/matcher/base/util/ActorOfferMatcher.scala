@@ -1,6 +1,8 @@
-package mesosphere.marathon.core.matcher.base.util
+package mesosphere.marathon
+package core.matcher.base.util
 
 import akka.actor.ActorRef
+import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.matcher.base.OfferMatcher
 import mesosphere.marathon.core.matcher.base.OfferMatcher.MatchedInstanceOps
 import mesosphere.marathon.state.{ PathId, Timestamp }
@@ -13,14 +15,16 @@ import scala.concurrent.duration._
   * Provides a thin wrapper around an OfferMatcher implemented as an actors.
   */
 class ActorOfferMatcher(
-    now: () => Timestamp,
     actorRef: ActorRef,
     override val precedenceFor: Option[PathId],
-    scheduler: akka.actor.Scheduler) extends OfferMatcher {
-  def matchOffer(deadline: Timestamp, offer: Offer): Future[MatchedInstanceOps] = {
-    val timeout: FiniteDuration = now().until(deadline)
+    scheduler: akka.actor.Scheduler) extends OfferMatcher with StrictLogging {
 
-    if (timeout.duration <= ActorOfferMatcher.MinimalOfferComputationTime) {
+  def matchOffer(now: Timestamp, deadline: Timestamp, offer: Offer): Future[MatchedInstanceOps] = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val timeout: FiniteDuration = now.until(deadline)
+
+    if (timeout <= ActorOfferMatcher.MinimalOfferComputationTime) {
       // if deadline is exceeded return no match
       Future.successful(MatchedInstanceOps.noMatch(offer.getId))
     } else {

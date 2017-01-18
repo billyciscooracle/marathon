@@ -75,7 +75,7 @@ trait OfferMatcher {
     *
     * TODO(jdef) PODS ... 1:1 ratio between TaskInfo and instanceOpXXX may change?
     */
-  def matchOffer(deadline: Timestamp, offer: Mesos.Offer): Future[OfferMatcher.MatchedInstanceOps]
+  def matchOffer(now: Timestamp, deadline: Timestamp, offer: Mesos.Offer): Future[OfferMatcher.MatchedInstanceOps]
 
   /**
     * We can optimize the offer routing for different offer matcher in case there are reserved resources.

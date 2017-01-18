@@ -1,7 +1,7 @@
 package mesosphere.marathon
 package core.matcher.manager.impl
 
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{ Actor, ActorLogging, Props }
 import akka.event.LoggingReceive
 import akka.pattern.pipe
 import mesosphere.marathon.core.base.Clock
@@ -147,7 +147,7 @@ private[impl] class OfferMatcherManagerActor private (
   private[this] def receiveProcessOffer: Receive = {
     case ActorOfferMatcher.MatchOffer(deadline, offer: Offer, promise: Promise[OfferMatcher.MatchedInstanceOps]) if !offersWanted =>
       log.debug(s"Ignoring offer ${offer.getId.getValue}: No one interested.")
-      promise.trySuccess(OfferMatcher.MatchedInstanceOps(offer.getId, resendThisOffer = false))
+      promise.trySuccess(OfferMatcher.MatchedInstanceOps.noMatch(offer.getId, resendThisOffer = false))
 
     case ActorOfferMatcher.MatchOffer(deadline, offer: Offer, promise: Promise[OfferMatcher.MatchedInstanceOps]) =>
       log.debug(s"Start processing offer ${offer.getId.getValue}")
@@ -240,11 +240,11 @@ private[impl] class OfferMatcherManagerActor private (
         import context.dispatcher
         log.debug(s"query next offer matcher $nextMatcher for offer id ${data.offer.getId.getValue}")
         nextMatcher
-          .matchOffer(newData.deadline, newData.offer)
+          .matchOffer(clock.now(), newData.deadline, newData.offer)
           .recover {
             case NonFatal(e) =>
               log.warning("Received error from {}", e)
-              MatchedInstanceOps(data.offer.getId, resendThisOffer = true)
+              MatchedInstanceOps.noMatch(data.offer.getId, resendThisOffer = true)
           }.pipeTo(self)
       case None => sendMatchResult(data, data.resendThisOffer)
     }

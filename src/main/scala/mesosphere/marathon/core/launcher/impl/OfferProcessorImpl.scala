@@ -2,7 +2,6 @@ package mesosphere.marathon
 package core.launcher.impl
 
 import akka.Done
-import akka.pattern.AskTimeoutException
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.base.Clock
 import mesosphere.marathon.core.instance.update.InstanceUpdateOperation
@@ -49,11 +48,12 @@ private[launcher] class OfferProcessorImpl(
     logger.debug(s"Received offer\n${offer}")
     incomingOffersMeter.mark()
 
-    val matchingDeadline = clock.now() + offerMatchingTimeout
+    val now = clock.now()
+    val matchingDeadline = now + offerMatchingTimeout
     val savingDeadline = matchingDeadline + saveTasksToLaunchTimeout
 
     val matchFuture: Future[MatchedInstanceOps] = matchTimeMeter.timeFuture {
-      offerMatcher.matchOffer(matchingDeadline, offer)
+      offerMatcher.matchOffer(now, matchingDeadline, offer)
     }
 
     matchFuture
