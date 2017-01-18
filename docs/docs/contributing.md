@@ -83,6 +83,19 @@ _TODO_: Do we need a CLA?
 
 - Run all tests via the supplied `./bin/run-tests.sh` script (requires docker).
 
+## Test Guidelines
+
+Our testing guidelines regarding fixtures are as follows:
+
+- DO NOT use `var thing: Type = _` with `before` / `after`.
+- Fixture instantiation and tear down should be defined and handled in the same module.
+- When testing actor systems, we instantiate an actor system for the entire suite. It's acceptable to let the actors get
+  cleaned up when the suite finishes. Use either unique actor names or use the loan-fixtures technique to get a unique
+  `ActorRefFactory` per test.
+- When teardown-per-test is desired, use the
+  [loan-fixtures methods](http://www.scalatest.org/user_guide/sharing_fixtures#loanFixtureMethods). Otherwise, use
+  composable traits or factory methods / case classes.
+
 ## Source Files
 
 - Public classes should be defined in a file of the same name, except for
