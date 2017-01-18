@@ -1,9 +1,10 @@
 package mesosphere.marathon
 package core.matcher.manager.impl
 
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{ Actor, ActorRef, Props }
 import akka.event.LoggingReceive
 import akka.pattern.pipe
+import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.core.base.Clock
 import mesosphere.marathon.core.matcher.base.OfferMatcher
 import mesosphere.marathon.core.matcher.base.OfferMatcher.{ InstanceOpWithSource, MatchedInstanceOps }
@@ -74,7 +75,7 @@ private[manager] object OfferMatcherManagerActor {
 private[impl] class OfferMatcherManagerActor private (
   metrics: OfferMatcherManagerActorMetrics,
   random: Random, clock: Clock, conf: OfferMatcherManagerConfig, offersWantedObserver: Observer[Boolean])
-    extends Actor with ActorLogging {
+    extends Actor with StrictLogging {
 
   private[this] var launchTokens: Int = 0
 
@@ -108,7 +109,7 @@ private[impl] class OfferMatcherManagerActor private (
   private[this] def receiveChangingMatchers: Receive = {
     case OfferMatcherManagerDelegate.AddOrUpdateMatcher(matcher) =>
       if (!matchers(matcher)) {
-        log.info("activating matcher {}.", matcher)
+        logger.info("activating matcher {}.", matcher)
         offerQueues.map { case (id, data) => id -> data.addMatcher(matcher) }
         matchers += matcher
         updateOffersWanted()
@@ -118,7 +119,7 @@ private[impl] class OfferMatcherManagerActor private (
 
     case OfferMatcherManagerDelegate.RemoveMatcher(matcher) =>
       if (matchers(matcher)) {
-        log.info("removing matcher {}", matcher)
+        logger.info("removing matcher {}", matcher)
         matchers -= matcher
         updateOffersWanted()
       }
@@ -145,11 +146,14 @@ private[impl] class OfferMatcherManagerActor private (
 
   private[this] def receiveProcessOffer: Receive = {
     case ActorOfferMatcher.MatchOffer(deadline, offer: Offer) if !offersWanted =>
-      log.debug(s"Ignoring offer ${offer.getId.getValue}: No one interested.")
+      logger.debug(s"Ignoring offer ${offer.getId.getValue}: No one interested.")
       sender() ! OfferMatcher.MatchedInstanceOps(offer.getId, resendThisOffer = false)
 
     case ActorOfferMatcher.MatchOffer(deadline, offer: Offer) =>
-      log.debug(s"Start processing offer ${offer.getId.getValue}")
+      logger.debug(s"Start processing offer ${offer.getId.getValue}")
+      logger.info(s"Start processing offer ${offer.getId.getValue}")
+      logger.warn(s"Start processing offer ${offer.getId.getValue}")
+      logger.error("sad", new RuntimeException("everything's broken"))
 
       // setup initial offer data
       val randomizedMatchers = offerMatchers(offer)
@@ -183,7 +187,7 @@ private[impl] class OfferMatcherManagerActor private (
           newData
         } catch {
           case NonFatal(e) =>
-            log.error(s"unexpected error processing ops for ${offerId.getValue} from ${sender()}", e)
+            logger.error(s"unexpected error processing ops for ${offerId.getValue} from ${sender()}", e)
             data
         }
 
@@ -195,7 +199,7 @@ private[impl] class OfferMatcherManagerActor private (
             offerQueues += offerId -> contDataWithActiveMatcher
             contDataWithActiveMatcher
           case None =>
-            log.warning(s"Got unexpected matched ops from ${sender()}: $addedOps")
+            logger.warn(s"Got unexpected matched ops from ${sender()}: $addedOps")
             dataWithInstances
         }
       }
@@ -218,15 +222,15 @@ private[impl] class OfferMatcherManagerActor private (
 
   private[this] def scheduleNextMatcherOrFinish(data: OfferData): Unit = {
     val nextMatcherOpt = if (data.deadline < clock.now()) {
-      log.warning(s"Deadline for ${data.offer.getId.getValue} overdue. Scheduled ${data.ops.size} ops so far.")
+      logger.warn(s"Deadline for ${data.offer.getId.getValue} overdue. Scheduled ${data.ops.size} ops so far.")
       None
     } else if (data.ops.size >= conf.maxInstancesPerOffer()) {
-      log.info(
+      logger.info(
         s"Already scheduled the maximum number of ${data.ops.size} instances on this offer. " +
           s"Increase with --${conf.maxInstancesPerOfferFlag.name}.")
       None
     } else if (launchTokens <= 0) {
-      log.info(
+      logger.info(
         s"No launch tokens left for ${data.offer.getId.getValue}. " +
           "Tune with --launch_tokens/launch_token_refresh_interval.")
       None
@@ -237,12 +241,12 @@ private[impl] class OfferMatcherManagerActor private (
     nextMatcherOpt match {
       case Some((nextMatcher, newData)) =>
         import context.dispatcher
-        log.debug(s"query next offer matcher $nextMatcher for offer id ${data.offer.getId.getValue}")
+        logger.debug(s"query next offer matcher $nextMatcher for offer id ${data.offer.getId.getValue}")
         nextMatcher
           .matchOffer(newData.deadline, newData.offer)
           .recover {
             case NonFatal(e) =>
-              log.warning("Received error from {}", e)
+              logger.warn("Received error from {}", e)
               MatchedInstanceOps(data.offer.getId, resendThisOffer = true)
           }.pipeTo(self)
       case None => sendMatchResult(data, data.resendThisOffer)
@@ -253,10 +257,10 @@ private[impl] class OfferMatcherManagerActor private (
     data.sender ! OfferMatcher.MatchedInstanceOps(data.offer.getId, data.ops, resendThisOffer)
     offerQueues -= data.offer.getId
     metrics.currentOffersGauge.setValue(offerQueues.size)
-    val maxRanges = if (log.isDebugEnabled) 1000 else 10
-    log.info(s"Finished processing ${data.offer.getId.getValue} from ${data.offer.getHostname}. " +
+    logger.info(s"Finished processing ${data.offer.getId.getValue} from ${data.offer.getHostname}. " +
       s"Matched ${data.ops.size} ops after ${data.matchPasses} passes. " +
-      s"${ResourceUtil.displayResources(data.offer.getResourcesList.to[Seq], maxRanges)} left.")
+      s"${ResourceUtil.displayResources(data.offer.getResourcesList.to[Seq], 10)} left.")
+    logger.debug(s"Full resources: ${ResourceUtil.displayResources(data.offer.getResourcesList.to[Seq], 1000)} left.")
   }
 }
 

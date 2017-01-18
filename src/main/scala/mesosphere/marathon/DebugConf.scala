@@ -116,8 +116,11 @@ class DebugModule(conf: DebugConf) extends AbstractModule {
     conf.logLevel.get.foreach { levelName =>
       val level = Level.toLevel(if ("fatal".equalsIgnoreCase(levelName)) "fatal" else levelName)
       LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) match {
-        case l: ch.qos.logback.classic.Logger => l.setLevel(level)
+        case l: ch.qos.logback.classic.Logger =>
+          System.err.println(s"Setting log level to ${level}")
+          l.setLevel(level)
         case _ =>
+          System.err.println(s"Unable to set log level to ${level} because logging system is not yet initialized")
       }
     }
 
