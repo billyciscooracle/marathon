@@ -23,14 +23,14 @@ case class UnreachableStrategy(
 object UnreachableStrategy {
   val DefaultEphemeralInactiveAfter: FiniteDuration = 5.minutes
   val DefaultEphemeralExpungeAfter: FiniteDuration = 10.minutes
-  val DefaultResidentInactiveAfter: FiniteDuration = 1.hour
+  val DefaultResidentInactiveAfter: FiniteDuration = 0.seconds
   val DefaultResidentExpungeAfter: FiniteDuration = 7.days
 
   val defaultEphemeral = UnreachableStrategy(DefaultEphemeralInactiveAfter, DefaultEphemeralExpungeAfter)
   val defaultResident = UnreachableStrategy(DefaultResidentInactiveAfter, DefaultResidentExpungeAfter)
 
   implicit val unreachableStrategyValidator = validator[UnreachableStrategy] { strategy =>
-    strategy.inactiveAfter should be >= 1.second
+    strategy.inactiveAfter should be >= 0.seconds
     strategy.inactiveAfter should be < strategy.expungeAfter
   }
 
